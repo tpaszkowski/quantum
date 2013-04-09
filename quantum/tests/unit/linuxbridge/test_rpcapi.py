@@ -76,7 +76,8 @@ class rpcApiTestCase(base.BaseTestCase):
                           'port_update', rpc_method='fanout_cast',
                           port='fake_port',
                           physical_network='fake_net',
-                          vlan_id='fake_vlan_id')
+                          network_type='vlan',
+                          segmentation_id='fake_vlan_id')
 
     def test_device_details(self):
         rpcapi = agent_rpc.PluginApi(topics.PLUGIN)

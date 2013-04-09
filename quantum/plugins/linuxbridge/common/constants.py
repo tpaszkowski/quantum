@@ -19,9 +19,14 @@
 
 FLAT_VLAN_ID = -1
 LOCAL_VLAN_ID = -2
+VLAN_ID_MAX = 4094
+VLAN_ID_MIN = 1
+VXLAN_VNI_MIN = 1
+VXLAN_VNI_MAX = 16777215
 
 # Values for network_type
 TYPE_FLAT = 'flat'
 TYPE_VLAN = 'vlan'
+TYPE_VXLAN = 'vxlan'
 TYPE_LOCAL = 'local'
 TYPE_NONE = 'none'

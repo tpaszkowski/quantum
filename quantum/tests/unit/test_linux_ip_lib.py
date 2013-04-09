@@ -205,6 +205,32 @@ class TestIpWrapper(base.BaseTestCase):
                                              'peer', 'name', 'tap1'),
                                              'sudo', None)
 
+    def test_add_vxlan(self):
+        ip_lib.IPWrapper('sudo').add_vxlan('vxlan_add_test', '1001')
+        self.execute.assert_called_once_with('', 'link',
+                                             ['add', 'vxlan_add_test',
+                                             'type', 'vxlan',
+                                             'id', '1001'],
+                                             'sudo', None)
+
+    def test_add_vxlan_with_parameters(self):
+        ip_lib.IPWrapper('sudo').add_vxlan('vxlan_add_test', '1001',
+                                           group='239.1.1.1', dev='eth0',
+                                           ttl='16', tos='1',
+                                           local='192.168.0.1',
+                                           port=('32768', '65535'))
+        self.execute.assert_called_once_with('', 'link',
+                                             ['add', 'vxlan_add_test',
+                                             'type', 'vxlan',
+                                             'id', '1001',
+                                             'group', '239.1.1.1',
+                                             'dev', 'eth0',
+                                             'ttl', '16',
+                                             'tos', '1',
+                                             'local', '192.168.0.1',
+                                             'port', '32768', '65535'],
+                                             'sudo', None)
+
     def test_get_device(self):
         dev = ip_lib.IPWrapper('sudo', 'ns').device('eth0')
         self.assertEqual(dev.root_helper, 'sudo')

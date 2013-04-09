@@ -97,6 +97,25 @@ class IPWrapper(SubProcessBase):
         return (IPDevice(name1, self.root_helper, self.namespace),
                 IPDevice(name2, self.root_helper, self.namespace))
 
+    def add_vxlan(self, name, vni, group=None, dev=None, ttl=None, tos=None,
+                  local=None, port=None):
+        cmd = ['add', name, 'type', 'vxlan', 'id', vni]
+        if group:
+                cmd.extend(['group', group])
+        if dev:
+                cmd.extend(['dev', dev])
+        if ttl:
+                cmd.extend(['ttl', ttl])
+        if tos:
+                cmd.extend(['tos', tos])
+        if local:
+                cmd.extend(['local', local])
+        # tuple: min,max
+        if port and len(port) == 2:
+                cmd.extend(['port', port[0], port[1]])
+        self._as_root('', 'link', cmd)
+        return (IPDevice(name, self.root_helper, self.namespace))
+
     def ensure_namespace(self, name):
         if not self.netns.exists(name):
             ip = self.netns.add(name)

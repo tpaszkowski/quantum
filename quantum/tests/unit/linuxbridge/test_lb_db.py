@@ -24,6 +24,8 @@ from quantum.tests.unit import test_db_plugin as test_plugin
 
 PHYS_NET = 'physnet1'
 PHYS_NET_2 = 'physnet2'
+VXLAN_TYPE = 'vxlan'
+VLAN_TYPE = 'vlan'
 VLAN_MIN = 10
 VLAN_MAX = 19
 VLAN_RANGES = {PHYS_NET: [(VLAN_MIN, VLAN_MAX)]}
@@ -120,12 +122,14 @@ class NetworkStatesTest(base.BaseTestCase):
         vlan_id = VLAN_MIN + 5
         self.assertFalse(lb_db.get_network_state(PHYS_NET,
                                                  vlan_id).allocated)
-        lb_db.reserve_specific_network(self.session, PHYS_NET, vlan_id)
+        lb_db.reserve_specific_network(self.session, PHYS_NET, VLAN_TYPE,
+                                       vlan_id)
         self.assertTrue(lb_db.get_network_state(PHYS_NET,
                                                 vlan_id).allocated)
 
         with testtools.ExpectedException(q_exc.VlanIdInUse):
-            lb_db.reserve_specific_network(self.session, PHYS_NET, vlan_id)
+            lb_db.reserve_specific_network(self.session, PHYS_NET, VLAN_TYPE,
+                                           vlan_id)
 
         lb_db.release_network(self.session, PHYS_NET, vlan_id, VLAN_RANGES)
         self.assertFalse(lb_db.get_network_state(PHYS_NET,
@@ -134,15 +138,50 @@ class NetworkStatesTest(base.BaseTestCase):
     def test_specific_network_outside_pool(self):
         vlan_id = VLAN_MAX + 5
         self.assertIsNone(lb_db.get_network_state(PHYS_NET, vlan_id))
-        lb_db.reserve_specific_network(self.session, PHYS_NET, vlan_id)
+        lb_db.reserve_specific_network(self.session, PHYS_NET, VLAN_TYPE,
+                                       vlan_id)
         self.assertTrue(lb_db.get_network_state(PHYS_NET,
                                                 vlan_id).allocated)
 
         with testtools.ExpectedException(q_exc.VlanIdInUse):
-            lb_db.reserve_specific_network(self.session, PHYS_NET, vlan_id)
+            lb_db.reserve_specific_network(self.session, PHYS_NET, VLAN_TYPE,
+                                           vlan_id)
 
         lb_db.release_network(self.session, PHYS_NET, vlan_id, VLAN_RANGES)
         self.assertIsNone(lb_db.get_network_state(PHYS_NET, vlan_id))
+
+    def test_specific_network_vxlan_pool(self):
+        vlan_id = VLAN_MAX + 5
+        self.assertIsNone(lb_db.get_network_state(PHYS_NET, vlan_id))
+        lb_db.reserve_specific_network(self.session, PHYS_NET, VXLAN_TYPE,
+                                       vlan_id)
+        self.assertTrue(lb_db.get_network_state(PHYS_NET,
+                                                vlan_id).allocated)
+
+        with testtools.ExpectedException(q_exc.VlanIdInUse):
+            lb_db.reserve_specific_network(self.session, PHYS_NET_2,
+                                           VXLAN_TYPE, vlan_id)
+
+        lb_db.release_network(self.session, PHYS_NET, vlan_id, VLAN_RANGES)
+        self.assertIsNone(lb_db.get_network_state(PHYS_NET, vlan_id))
+
+    def test_specific_network_vlan_pool(self):
+        vlan_id = VLAN_MAX + 5
+        self.assertIsNone(lb_db.get_network_state(PHYS_NET, vlan_id))
+        self.assertIsNone(lb_db.get_network_state(PHYS_NET_2, vlan_id))
+        lb_db.reserve_specific_network(self.session, PHYS_NET, VLAN_TYPE,
+                                       vlan_id)
+        self.assertTrue(lb_db.get_network_state(PHYS_NET,
+                                                vlan_id).allocated)
+        lb_db.reserve_specific_network(self.session, PHYS_NET_2, VLAN_TYPE,
+                                       vlan_id)
+        self.assertTrue(lb_db.get_network_state(PHYS_NET_2,
+                                                vlan_id).allocated)
+
+        lb_db.release_network(self.session, PHYS_NET, vlan_id, VLAN_RANGES)
+        self.assertIsNone(lb_db.get_network_state(PHYS_NET, vlan_id))
+        lb_db.release_network(self.session, PHYS_NET_2, vlan_id, VLAN_RANGES)
+        self.assertIsNone(lb_db.get_network_state(PHYS_NET_2, vlan_id))
 
 
 class NetworkBindingsTest(test_plugin.QuantumDbPluginV2TestCase):
@@ -156,10 +195,11 @@ class NetworkBindingsTest(test_plugin.QuantumDbPluginV2TestCase):
             TEST_NETWORK_ID = network['network']['id']
             self.assertIsNone(lb_db.get_network_binding(self.session,
                                                         TEST_NETWORK_ID))
-            lb_db.add_network_binding(self.session, TEST_NETWORK_ID, PHYS_NET,
-                                      1234)
+            lb_db.add_network_binding(self.session, TEST_NETWORK_ID, 'vxlan',
+                                      PHYS_NET, 1234)
             binding = lb_db.get_network_binding(self.session, TEST_NETWORK_ID)
             self.assertIsNotNone(binding)
             self.assertEqual(binding.network_id, TEST_NETWORK_ID)
+            self.assertEqual(binding.network_type, 'vxlan')
             self.assertEqual(binding.physical_network, PHYS_NET)
             self.assertEqual(binding.vlan_id, 1234)

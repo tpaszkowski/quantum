@@ -122,14 +122,15 @@ def reserve_network(session):
     return (state.physical_network, state.vlan_id)
 
 
-def reserve_specific_network(session, physical_network, vlan_id):
+def reserve_specific_network(session, physical_network, network_type, vlan_id):
     with session.begin(subtransactions=True):
         try:
-            state = (session.query(l2network_models_v2.NetworkState).
-                     filter_by(physical_network=physical_network,
-                               vlan_id=vlan_id).
-                     with_lockmode('update').
-                     one())
+            state_q = (session.query(l2network_models_v2.NetworkState).
+                       filter_by(vlan_id=vlan_id))
+            if network_type != constants.TYPE_VXLAN:
+            # for non VXLAN networks vlan numbering if per physical_network
+                state_q = state_q.filter_by(physical_network=physical_network)
+            state = state_q.with_lockmode('update').one()
             if state.allocated:
                 if vlan_id == constants.FLAT_VLAN_ID:
                     raise q_exc.FlatNetworkInUse(
@@ -175,9 +176,10 @@ def release_network(session, physical_network, vlan_id, network_vlan_ranges):
                           "%(physical_network)s not found"), locals())
 
 
-def add_network_binding(session, network_id, physical_network, vlan_id):
+def add_network_binding(session, network_id, network_type, physical_network,
+                        vlan_id):
     with session.begin(subtransactions=True):
-        binding = l2network_models_v2.NetworkBinding(network_id,
+        binding = l2network_models_v2.NetworkBinding(network_id, network_type,
                                                      physical_network, vlan_id)
         session.add(binding)
 

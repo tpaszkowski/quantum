@@ -76,6 +76,7 @@ class rpcApiTestCase(base.BaseTestCase):
                           'port_update', rpc_method='fanout_cast',
                           port='fake_port',
                           physical_network='fake_net',
+                          network_type='vlan',
                           vlan_id='fake_vlan_id')
 
     def test_device_details(self):

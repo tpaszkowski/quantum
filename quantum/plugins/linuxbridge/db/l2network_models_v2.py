@@ -45,15 +45,19 @@ class NetworkBinding(model_base.BASEV2):
     network_id = sa.Column(sa.String(36),
                            sa.ForeignKey('networks.id', ondelete="CASCADE"),
                            primary_key=True)
+    # 'vxlan', 'vlan', 'flat'
+    network_type = sa.Column(sa.String(32), nullable=False)
     physical_network = sa.Column(sa.String(64))
     vlan_id = sa.Column(sa.Integer, nullable=False)
 
-    def __init__(self, network_id, physical_network, vlan_id):
+    def __init__(self, network_id, network_type, physical_network, vlan_id):
         self.network_id = network_id
+        self.network_type = network_type
         self.physical_network = physical_network
         self.vlan_id = vlan_id
 
     def __repr__(self):
         return "<NetworkBinding(%s,%s,%d)>" % (self.network_id,
+                                               self.network_type,
                                                self.physical_network,
                                                self.vlan_id)

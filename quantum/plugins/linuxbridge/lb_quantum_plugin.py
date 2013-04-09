@@ -87,6 +87,7 @@ class LinuxBridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
                                              port['network_id'])
             entry = {'device': device,
                      'physical_network': binding.physical_network,
+                     'network_type': binding.network_type,
                      'vlan_id': binding.vlan_id,
                      'network_id': port['network_id'],
                      'port_id': port['id'],
@@ -163,10 +164,11 @@ class AgentNotifierApi(proxy.RpcProxy,
                                        network_id=network_id),
                          topic=self.topic_network_delete)
 
-    def port_update(self, context, port, physical_network, vlan_id):
+    def port_update(self, context, port, network_type, physical_network, vlan_id):
         self.fanout_cast(context,
                          self.make_msg('port_update',
                                        port=port,
+                                       network_type=network_type,
                                        physical_network=physical_network,
                                        vlan_id=vlan_id),
                          topic=self.topic_port_update)
@@ -223,6 +225,7 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self.tenant_network_type = cfg.CONF.VLANS.tenant_network_type
         if self.tenant_network_type not in [constants.TYPE_LOCAL,
                                             constants.TYPE_VLAN,
+                                            constants.TYPE_VXLAN,
                                             constants.TYPE_NONE]:
             LOG.error(_("Invalid tenant_network_type: %s. "
                         "Service terminated!"),
@@ -264,6 +267,12 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                 "Service terminated!"),
                               locals())
                     sys.exit(1)
+            elif self.tenant_network_type == constants.TYPE_VXLAN:
+                    LOG.error(_("Invalid network VLAN range for VXLAN. "
+                                "No physical network or vlan range. "
+                                "Service terminated!"),
+                              locals())
+                    sys.exit(1)
             else:
                 self._add_network(entry)
         LOG.debug(_("Network VLAN ranges: %s"), self.network_vlan_ranges)
@@ -289,15 +298,15 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         if self._check_view_auth(context, network, self.network_view):
             binding = db.get_network_binding(context.session, network['id'])
             if binding.vlan_id == constants.FLAT_VLAN_ID:
-                network[provider.NETWORK_TYPE] = constants.TYPE_FLAT
+                network[provider.NETWORK_TYPE] = binding.network_type
                 network[provider.PHYSICAL_NETWORK] = binding.physical_network
                 network[provider.SEGMENTATION_ID] = None
             elif binding.vlan_id == constants.LOCAL_VLAN_ID:
-                network[provider.NETWORK_TYPE] = constants.TYPE_LOCAL
+                network[provider.NETWORK_TYPE] = binding.network_type
                 network[provider.PHYSICAL_NETWORK] = None
                 network[provider.SEGMENTATION_ID] = None
             else:
-                network[provider.NETWORK_TYPE] = constants.TYPE_VLAN
+                network[provider.NETWORK_TYPE] = binding.network_type
                 network[provider.PHYSICAL_NETWORK] = binding.physical_network
                 network[provider.SEGMENTATION_ID] = binding.vlan_id
 
@@ -334,6 +343,14 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 msg = _("provider:segmentation_id out of range "
                         "(1 through 4094)")
                 raise q_exc.InvalidInput(error_message=msg)
+        elif network_type == constants.TYPE_VXLAN:
+            if not segmentation_id_set:
+                msg = _("provider:segmentation_id required")
+                raise q_exc.InvalidInput(error_message=msg)
+            if segmentation_id < 1 or segmentation_id > 16777215:
+                msg = _("provider:segmentation_id out of range "
+                        "(1 through 16777215)")
+                raise q_exc.InvalidInput(error_message=msg)
         elif network_type == constants.TYPE_LOCAL:
             if physical_network_set:
                 msg = _("provider:physical_network specified for local "
@@ -351,7 +368,8 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             msg = _("provider:network_type %s not supported") % network_type
             raise q_exc.InvalidInput(error_message=msg)
 
-        if network_type in [constants.TYPE_VLAN, constants.TYPE_FLAT]:
+        if network_type in [constants.TYPE_VLAN, constants.TYPE_VXLAN,
+                            constants.TYPE_FLAT]:
             if physical_network_set:
                 if physical_network not in self.network_vlan_ranges:
                     msg = (_("Unknown provider:physical_network %s") %
@@ -401,19 +419,21 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 network_type = self.tenant_network_type
                 if network_type == constants.TYPE_NONE:
                     raise q_exc.TenantNetworksDisabled()
-                elif network_type == constants.TYPE_VLAN:
+                elif network_type in [constants.TYPE_VLAN,
+                                      constants.TYPE_VXLAN]:
                     physical_network, vlan_id = db.reserve_network(session)
                 else:  # TYPE_LOCAL
                     vlan_id = constants.LOCAL_VLAN_ID
             else:
                 # provider network
-                if network_type in [constants.TYPE_VLAN, constants.TYPE_FLAT]:
+                if network_type in [constants.TYPE_VLAN, constants.TYPE_VXLAN,
+                                    constants.TYPE_FLAT]:
                     db.reserve_specific_network(session, physical_network,
                                                 vlan_id)
                 # no reservation needed for TYPE_LOCAL
             net = super(LinuxBridgePluginV2, self).create_network(context,
                                                                   network)
-            db.add_network_binding(session, net['id'],
+            db.add_network_binding(session, net['id'], network_type,
                                    physical_network, vlan_id)
             self._process_l3_create(context, network['network'], net['id'])
             self._extend_network_dict_provider(context, net)
@@ -555,5 +575,6 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         binding = db.get_network_binding(context.session,
                                          port['network_id'])
         self.notifier.port_update(context, port,
+                                  binding.network_type,
                                   binding.physical_network,
                                   binding.vlan_id)

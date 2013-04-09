@@ -156,10 +156,11 @@ class NetworkBindingsTest(test_plugin.QuantumDbPluginV2TestCase):
             TEST_NETWORK_ID = network['network']['id']
             self.assertIsNone(lb_db.get_network_binding(self.session,
                                                         TEST_NETWORK_ID))
-            lb_db.add_network_binding(self.session, TEST_NETWORK_ID, PHYS_NET,
-                                      1234)
+            lb_db.add_network_binding(self.session, TEST_NETWORK_ID, 'vxlan',
+                                      PHYS_NET, 1234)
             binding = lb_db.get_network_binding(self.session, TEST_NETWORK_ID)
             self.assertIsNotNone(binding)
             self.assertEqual(binding.network_id, TEST_NETWORK_ID)
+            self.assertEqual(binding.network_type, 'vxlan')
             self.assertEqual(binding.physical_network, PHYS_NET)
             self.assertEqual(binding.vlan_id, 1234)

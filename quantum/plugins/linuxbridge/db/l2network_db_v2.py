@@ -175,9 +175,10 @@ def release_network(session, physical_network, vlan_id, network_vlan_ranges):
                           "%(physical_network)s not found"), locals())
 
 
-def add_network_binding(session, network_id, physical_network, vlan_id):
+def add_network_binding(session, network_id, network_type, physical_network,
+                        vlan_id):
     with session.begin(subtransactions=True):
-        binding = l2network_models_v2.NetworkBinding(network_id,
+        binding = l2network_models_v2.NetworkBinding(network_id, network_type,
                                                      physical_network, vlan_id)
         session.add(binding)
 

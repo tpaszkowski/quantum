@@ -22,20 +22,24 @@ class NetworkState(model_base.BASEV2):
     """Represents state of vlan_id on physical network."""
     __tablename__ = 'network_states'
 
+    # 'vxlan', 'vlan', 'flat'
+    network_type = sa.Column(sa.String(32), nullable=False, primary_key=True)
     physical_network = sa.Column(sa.String(64), nullable=False,
                                  primary_key=True)
     vlan_id = sa.Column(sa.Integer, nullable=False, primary_key=True,
                         autoincrement=False)
     allocated = sa.Column(sa.Boolean, nullable=False)
 
-    def __init__(self, physical_network, vlan_id):
+    def __init__(self, network_type, physical_network, vlan_id):
+        self.network_type = network_type
         self.physical_network = physical_network
         self.vlan_id = vlan_id
         self.allocated = False
 
     def __repr__(self):
-        return "<NetworkState(%s,%d,%s)>" % (self.physical_network,
-                                             self.vlan_id, self.allocated)
+        return "<NetworkState(%s,%s,%d,%s)>" % (self.network_type,
+                                                self.physical_network,
+                                                self.vlan_id, self.allocated)
 
 
 class NetworkBinding(model_base.BASEV2):
@@ -45,15 +49,18 @@ class NetworkBinding(model_base.BASEV2):
     network_id = sa.Column(sa.String(36),
                            sa.ForeignKey('networks.id', ondelete="CASCADE"),
                            primary_key=True)
+    network_type = sa.Column(sa.String(32), nullable=False)
     physical_network = sa.Column(sa.String(64))
     vlan_id = sa.Column(sa.Integer, nullable=False)
 
-    def __init__(self, network_id, physical_network, vlan_id):
+    def __init__(self, network_id, network_type, physical_network, vlan_id):
         self.network_id = network_id
+        self.network_type = network_type
         self.physical_network = physical_network
         self.vlan_id = vlan_id
 
     def __repr__(self):
-        return "<NetworkBinding(%s,%s,%d)>" % (self.network_id,
-                                               self.physical_network,
-                                               self.vlan_id)
+        return "<NetworkBinding(%s,%s,%s,%d)>" % (self.network_id,
+                                                  self.network_type,
+                                                  self.physical_network,
+                                                  self.vlan_id)

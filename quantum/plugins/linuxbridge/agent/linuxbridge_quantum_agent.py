@@ -50,6 +50,7 @@ LOG = logging.getLogger(__name__)
 
 BRIDGE_NAME_PREFIX = "brq"
 TAP_INTERFACE_PREFIX = "tap"
+VXLAN_INTERFACE_PREFIX = "vxl"
 BRIDGE_FS = "/sys/devices/virtual/net/"
 BRIDGE_NAME_PLACEHOLDER = "bridge_name"
 BRIDGE_INTERFACES_FS = BRIDGE_FS + BRIDGE_NAME_PLACEHOLDER + "/brif/"
@@ -104,6 +105,13 @@ class LinuxBridgeManager:
         tap_device_name = TAP_INTERFACE_PREFIX + interface_id[0:11]
         return tap_device_name
 
+    def get_vxlan_device_name(self, network_id):
+        if not network_id:
+            LOG.warning(_("Invalid Network ID, will lead to incorrect "
+                          "vxlan device name"))
+        vxlan_device_name = VXLAN_INTERFACE_PREFIX + network_id[0:11]
+        return vxlan_device_name
+
     def get_all_quantum_bridges(self):
         quantum_bridge_list = []
         bridge_list = os.listdir(BRIDGE_FS)
@@ -138,6 +146,19 @@ class LinuxBridgeManager:
     def ensure_vlan_bridge(self, network_id, physical_interface, vlan_id):
         """Create a vlan and bridge unless they already exist."""
         interface = self.ensure_vlan(physical_interface, vlan_id)
+        bridge_name = self.get_bridge_name(network_id)
+        self.ensure_bridge(bridge_name, interface)
+        return interface
+
+    def ensure_vxlan_bridge(self, network_id, physical_interface, vlan_id):
+        """Create a vxlan and bridge unless they already exist."""
+        interface = self.ensure_vxlan(network_id, physical_interface, vlan_id)
+        if not interface:
+            LOG.error(_("Failed creating vxlan interface for %(vlan_id)s on "
+                        "interface %(physical_interface)s !"),
+                      {vlan_id: vlan_id,
+                       physical_interface: physical_interface})
+            return
         bridge_name = self.get_bridge_name(network_id)
         self.ensure_bridge(bridge_name, interface)
         return interface
@@ -180,6 +201,33 @@ class LinuxBridgeManager:
                               interface, 'up'], root_helper=self.root_helper):
                 return
             LOG.debug(_("Done creating subinterface %s"), interface)
+        return interface
+
+    def ensure_vxlan(self, network_id, physical_interface, vlan_id):
+        """Create a vxlan unless it already exists."""
+        interface = self.get_vxlan_device_name(network_id)
+        if not self.device_exists(interface):
+            LOG.debug(_("Creating vxlan interface %(interface)s for "
+                        "VLAN %(vlan_id)s on interface "
+                        "%(physical_interface)s"),
+                      {interface: interface,
+                       vlan_id: vlan_id,
+                       physical_interface: physical_interface})
+            args = {'dev': physical_interface,
+                    'group': cfg.CONF.VXLAN.vxlan_group}
+            if cfg.CONF.VXLAN.vxlan_ttl:
+                args['ttl'] = cfg.CONF.VXLAN.vxlan_ttl
+            if cfg.CONF.VXLAN.vxlan_tos:
+                args['tos'] = cfg.CONF.VXLAN.vxlan_tos
+            # vxlan_port is a tuple min,max port value
+            if len(cfg.CONF.VXLAN.vxlan_port) == 2:
+                args['port'] = cfg.CONF.VXLAN.vxlan_port
+            if (cfg.CONF.VXLAN.vxlan_local_ip and
+                    len(cfg.CONF.VXLAN.vxlan_local_ip)):
+                args['local'] = cfg.CONF.VXLAN.vxlan_local_ip
+            int_vxlan = self.ip.add_vxlan(interface, vlan_id, **args)
+            int_vxlan.link.set_up()
+            LOG.debug(_("Done creating vxlan interface %s"), interface)
         return interface
 
     def update_interface_ip_details(self, destination, source, ips,
@@ -252,6 +300,7 @@ class LinuxBridgeManager:
                 return
 
     def ensure_physical_in_bridge(self, network_id,
+                                  network_type,
                                   physical_network,
                                   vlan_id):
         physical_interface = self.interface_mappings.get(physical_network)
@@ -260,17 +309,27 @@ class LinuxBridgeManager:
                       physical_network)
             return False
 
-        if int(vlan_id) == lconst.FLAT_VLAN_ID:
-            self.ensure_flat_bridge(network_id, physical_interface)
+        if network_type == lconst.TYPE_FLAT:
+            interface = self.ensure_flat_bridge(network_id,
+                                                physical_interface)
+        elif network_type == lconst.TYPE_VLAN:
+            interface = self.ensure_vlan_bridge(network_id,
+                                                physical_interface,
+                                                vlan_id)
+        elif network_type == lconst.TYPE_VXLAN:
+            interface = self.ensure_vxlan_bridge(network_id,
+                                                 physical_interface,
+                                                 vlan_id)
         else:
-            self.ensure_vlan_bridge(network_id, physical_interface,
-                                    vlan_id)
-        return True
+            LOG.error(_("Unknown network type %(network_type)s for network "
+                        "%(network_id)s."), {network_type: network_type,
+                                             network_id: network_id})
+            return
+        return interface is not None
 
-    def add_tap_interface(self, network_id, physical_network, vlan_id,
-                          tap_device_name):
+    def add_tap_interface(self, network_id, network_type, physical_network,
+                          vlan_id, tap_device_name):
         """Add tap interface.
-
         If a VIF has been plugged into a network, this function will
         add the corresponding tap device to the relevant bridge.
         """
@@ -280,10 +339,11 @@ class LinuxBridgeManager:
             return False
 
         bridge_name = self.get_bridge_name(network_id)
-        if int(vlan_id) == lconst.LOCAL_VLAN_ID:
+        if network_type == lconst.TYPE_LOCAL:
             self.ensure_local_bridge(network_id)
         else:
             result = self.ensure_physical_in_bridge(network_id,
+                                                    network_type,
                                                     physical_network,
                                                     vlan_id)
             if not result:
@@ -308,10 +368,10 @@ class LinuxBridgeManager:
             LOG.debug(msg)
         return True
 
-    def add_interface(self, network_id, physical_network, vlan_id,
-                      port_id):
+    def add_interface(self, network_id, network_type, physical_network,
+                      vlan_id, port_id):
         tap_device_name = self.get_tap_device_name(port_id)
-        return self.add_tap_interface(network_id,
+        return self.add_tap_interface(network_id, network_type,
                                       physical_network, vlan_id,
                                       tap_device_name)
 
@@ -328,9 +388,10 @@ class LinuxBridgeManager:
                         self.update_interface_ip_details(interface,
                                                          bridge_name,
                                                          ips, gateway)
-                    else:
-                        if interface.startswith(physical_interface):
+                    elif interface.startswith(physical_interface):
                             self.delete_vlan(interface)
+                    elif interface.startswith(VXLAN_INTERFACE_PREFIX):
+                            self.delete_vxlan(interface)
 
             LOG.debug(_("Deleting bridge %s"), bridge_name)
             if utils.execute(['ip', 'link', 'set', bridge_name, 'down'],
@@ -379,6 +440,15 @@ class LinuxBridgeManager:
                 return
             LOG.debug(_("Done deleting subinterface %s"), interface)
 
+    def delete_vxlan(self, interface):
+        if self.device_exists(interface):
+            LOG.debug(_("Deleting vxlan interface %s for vlan"),
+                      interface)
+            int_vxlan = self.ip.device(interface)
+            int_vxlan.link.set_down()
+            int_vxlan.link.delete()
+            LOG.debug(_("Done deleting vxlan interface %s"), interface)
+
     def update_devices(self, registered_devices):
         devices = self.udev_get_tap_devices()
         if devices == registered_devices:
@@ -409,7 +479,9 @@ class LinuxBridgeRpcCallbacks(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
     # Set RPC API version to 1.0 by default.
     # history
     #   1.1 Support Security Group RPC
-    RPC_API_VERSION = '1.1'
+    #   1.2 Support for network_type in port_update and renamed vlan_id
+    #       parameter to segmentation_id
+    RPC_API_VERSION = '1.2'
 
     def __init__(self, context, agent):
         self.context = context
@@ -436,12 +508,14 @@ class LinuxBridgeRpcCallbacks(sg_rpc.SecurityGroupAgentRpcCallbackMixin):
             self.sg_agent.refresh_firewall()
 
         if port['admin_state_up']:
-            vlan_id = kwargs.get('vlan_id')
+            segmentation_id = kwargs.get('segmentation_id')
+            network_type = kwargs.get('network_type')
             physical_network = kwargs.get('physical_network')
             # create the networking for the port
             self.agent.br_mgr.add_interface(port['network_id'],
+                                            network_type,
                                             physical_network,
-                                            vlan_id,
+                                            segmentation_id,
                                             port['id'])
             # update plugin about port status
             self.agent.plugin_rpc.update_device_up(self.context,
@@ -481,7 +555,7 @@ class LinuxBridgeQuantumAgentRPC(sg_rpc.SecurityGroupAgentRpcMixin):
             'binary': 'quantum-linuxbridge-agent',
             'host': cfg.CONF.host,
             'topic': constants.L2_AGENT_TOPIC,
-            'configurations': interface_mappings,
+            'configurations': interface_mappings.copy(),
             'agent_type': constants.AGENT_TYPE_LINUXBRIDGE,
             'start_flag': True}
 
@@ -573,8 +647,9 @@ class LinuxBridgeQuantumAgentRPC(sg_rpc.SecurityGroupAgentRpcMixin):
                 if details['admin_state_up']:
                     # create the networking for the port
                     self.br_mgr.add_interface(details['network_id'],
+                                              details['network_type'],
                                               details['physical_network'],
-                                              details['vlan_id'],
+                                              details['segmentation_id'],
                                               details['port_id'])
                 else:
                     self.remove_port_binding(details['network_id'],
@@ -644,6 +719,21 @@ class LinuxBridgeQuantumAgentRPC(sg_rpc.SecurityGroupAgentRpcMixin):
                            'elapsed': elapsed})
 
 
+def check_vxlan_port_value(vxlan_port):
+    # vxlan_port is a tuple min,max port value
+    if len(vxlan_port) == 2:
+        try:
+            int(vxlan_port[0])
+            int(vxlan_port[1])
+        except ValueError:
+            return False
+        return True
+    elif not len(vxlan_port):
+        return True
+    else:
+        return False
+
+
 def main():
     eventlet.monkey_patch()
     cfg.CONF(project='quantum')
@@ -657,6 +747,11 @@ def main():
                     " Agent terminated!"), e)
         sys.exit(1)
     LOG.info(_("Interface mappings: %s"), interface_mappings)
+    # vxlan_port is a tuple min,max port value
+    if not check_vxlan_port_value(cfg.CONF.VXLAN.vxlan_port):
+        LOG.error(_("Wrong vxlan_port value: %s. Agent terminated!"),
+                  ",".join(cfg.CONF.VXLAN.vxlan_port))
+        sys.exit(1)
 
     polling_interval = cfg.CONF.AGENT.polling_interval
     root_helper = cfg.CONF.AGENT.root_helper

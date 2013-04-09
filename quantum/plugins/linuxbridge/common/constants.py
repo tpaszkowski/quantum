@@ -23,5 +23,6 @@ LOCAL_VLAN_ID = -2
 # Values for network_type
 TYPE_FLAT = 'flat'
 TYPE_VLAN = 'vlan'
+TYPE_VXLAN = 'vxlan'
 TYPE_LOCAL = 'local'
 TYPE_NONE = 'none'

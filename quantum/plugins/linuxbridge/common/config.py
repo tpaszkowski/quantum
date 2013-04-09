@@ -24,12 +24,18 @@ from quantum import scheduler
 
 DEFAULT_VLAN_RANGES = []
 DEFAULT_INTERFACE_MAPPINGS = []
+DEFAULT_VXLAN_TTL = None
+DEFAULT_VXLAN_GROUP = '239.1.1.1'
+DEFAULT_VXLAN_TOS = None
+DEFAULT_VXLAN_PORT = []
+DEFAULT_VXLAN_LOCAL_IP = None
+
 
 
 vlan_opts = [
     cfg.StrOpt('tenant_network_type', default='local',
                help=_("Network type for tenant networks "
-                      "(local, vlan, or none)")),
+                      "(local, vlan, vxlan or none)")),
     cfg.ListOpt('network_vlan_ranges',
                 default=DEFAULT_VLAN_RANGES,
                 help=_("List of <physical_network>:<vlan_min>:<vlan_max> "
@@ -48,10 +54,25 @@ agent_opts = [
                       "polling for local device changes.")),
 ]
 
+vxlan_opts = [
+    cfg.IntOpt('vxlan_ttl', default=DEFAULT_VXLAN_TTL,
+               help=_("TTL for vxlan interface protocol packets.")),
+    cfg.StrOpt('vxlan_group', default=DEFAULT_VXLAN_GROUP,
+               help=_("Multicast group for vxlan interface.")),
+    cfg.IntOpt('vxlan_tos', default=DEFAULT_VXLAN_TOS,
+               help=_("TOS for vxlan interface protocol packets.")),
+    cfg.ListOpt('vxlan_port', default=DEFAULT_VXLAN_PORT,
+               help=_("Port range for vxlan interface protocol packets "
+                      "(min,max).")),
+    cfg.StrOpt('vxlan_local_ip', default=DEFAULT_VXLAN_LOCAL_IP,
+               help=_("Local ip for vxlan interface protocol packets.")),
+]
+
 
 cfg.CONF.register_opts(vlan_opts, "VLANS")
 cfg.CONF.register_opts(bridge_opts, "LINUX_BRIDGE")
 cfg.CONF.register_opts(agent_opts, "AGENT")
+cfg.CONF.register_opts(vxlan_opts, "VXLAN")
 cfg.CONF.register_opts(scheduler.AGENTS_SCHEDULER_OPTS)
 config.register_agent_state_opts_helper(cfg.CONF)
 config.register_root_helper(cfg.CONF)

@@ -30,8 +30,6 @@ DEFAULT_VXLAN_TOS = None
 DEFAULT_VXLAN_PORT = []
 DEFAULT_VXLAN_LOCAL_IP = None
 
-
-
 vlan_opts = [
     cfg.StrOpt('tenant_network_type', default='local',
                help=_("Network type for tenant networks "
@@ -63,7 +61,7 @@ vxlan_opts = [
                help=_("TOS for vxlan interface protocol packets.")),
     cfg.ListOpt('vxlan_port', default=DEFAULT_VXLAN_PORT,
                 help=_("Port range for vxlan interface protocol packets "
-                      "(min,max).")),
+                       "(min,max).")),
     cfg.StrOpt('vxlan_local_ip', default=DEFAULT_VXLAN_LOCAL_IP,
                help=_("Local ip for vxlan interface protocol packets.")),
 ]

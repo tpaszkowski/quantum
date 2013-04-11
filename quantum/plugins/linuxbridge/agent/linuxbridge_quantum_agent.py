@@ -138,8 +138,13 @@ class LinuxBridgeManager:
     def ensure_vlan_bridge(self, network_id, physical_interface, vlan_id):
         """Create a vlan and bridge unless they already exist."""
         interface = self.ensure_vlan(physical_interface, vlan_id)
+        if not interface:
+            LOG.error(_("Failed creating vlan interface for %s !"), vlan_id)
+            return
         bridge_name = self.get_bridge_name(network_id)
-        self.ensure_bridge(bridge_name, interface)
+        if not self.ensure_bridge(bridge_name, interface):
+            LOG.error(_("Failed creating vlan interface for %s !"), vlan_id)
+            return
         return interface
 
     def get_interface_details(self, interface):
@@ -154,13 +159,18 @@ class LinuxBridgeManager:
         """Create a non-vlan bridge unless it already exists."""
         bridge_name = self.get_bridge_name(network_id)
         ips, gateway = self.get_interface_details(physical_interface)
-        self.ensure_bridge(bridge_name, physical_interface, ips, gateway)
+        if not self.ensure_bridge(bridge_name, physical_interface, ips,
+                                  gateway):
+            LOG.error(_("Failed creating vlan interface for %s !"), vlan_id)
+            return
         return physical_interface
 
     def ensure_local_bridge(self, network_id):
         """Create a local bridge unless it already exists."""
         bridge_name = self.get_bridge_name(network_id)
-        self.ensure_bridge(bridge_name)
+        if not self.ensure_bridge(bridge_name):
+            LOG.error(_("Failed creating local bridge !"))
+            return
 
     def ensure_vlan(self, physical_interface, vlan_id):
         """Create a vlan unless it already exists."""
@@ -249,6 +259,8 @@ class LinuxBridgeManager:
                             "Exception: %(e)s"), locals())
                 return
 
+        return bridge_name
+
     def ensure_physical_in_bridge(self, network_id,
                                   physical_network,
                                   vlan_id):
@@ -278,13 +290,14 @@ class LinuxBridgeManager:
 
         bridge_name = self.get_bridge_name(network_id)
         if int(vlan_id) == lconst.LOCAL_VLAN_ID:
-            self.ensure_local_bridge(network_id)
+            result = self.ensure_local_bridge(network_id)
         else:
             result = self.ensure_physical_in_bridge(network_id,
                                                     physical_network,
                                                     vlan_id)
-            if not result:
-                return False
+        if not result:
+            LOG.error(_("Failed ensuring bridge: %s !", bridge_name)
+            return False
 
         # Check if device needs to be added to bridge
         tap_device_in_bridge = self.get_bridge_for_tap_device(tap_device_name)

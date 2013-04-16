@@ -328,8 +328,7 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                             "Service terminated!"), dict(entry=entry, ex=ex))
                 sys.exit(1)
         if not len(self.network_vni_ranges):
-            LOG.error(_("Empty VNI range for VXLAN. Service terminated!"))
-            sys.exit(1)
+            LOG.debug(_("Empty VNI range for VXLAN. Service terminated!"))
         LOG.debug(_("Network VNI ranges: %s"), self.network_vni_ranges)
 
     def _check_view_auth(self, context, resource, action):

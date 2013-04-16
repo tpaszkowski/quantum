@@ -227,11 +227,12 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def __init__(self):
         db.initialize()
         self.tenant_network_type = cfg.CONF.VLANS.tenant_network_type
+        self._parse_network_vni_ranges()
+        self._parse_network_vlan_ranges()
         if self.tenant_network_type == constants.TYPE_VXLAN:
-            self._parse_network_vni_ranges()
+            db.sync_network_states(self.network_vni_ranges)
         else:
-            self._parse_network_vlan_ranges()
-        db.sync_network_states(self.network_vlan_ranges)
+            db.sync_network_states(self.network_vlan_ranges)
         if self.tenant_network_type not in [constants.TYPE_LOCAL,
                                             constants.TYPE_VLAN,
                                             constants.TYPE_VXLAN,
@@ -287,13 +288,17 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                         (vni_min <= r[0] <= vni_max) or
                         (vni_min <= r[1] <= vni_max)) for r in ranges)
 
-        self.network_vlan_ranges = {}
+        self.network_vni_ranges = {}
         network_vni_ranges = []
         for entry in cfg.CONF.VXLAN.network_vni_ranges:
+            # VXLAN only as a provider network
+            if not ':' in entry:
+                self._add_vxlan_network(entry)
+                continue
             try:
-                physical_network, vlan_min, vlan_max = entry.split(':')
-                if (int(vlan_min) < constants.VXLAN_VNI_MIN or
-                        int(vlan_max) > constants.VXLAN_VNI_MAX):
+                physical_network, vni_min, vni_max = entry.split(':')
+                if (int(vni_min) < constants.VXLAN_VNI_MIN or
+                        int(vni_max) > constants.VXLAN_VNI_MAX):
                     LOG.error(_("Invalid network VNI range: %(entry)s. "
                                 "Starting or ending VNI is out of allowed "
                                 "range (%(min)s through %(max)s). "
@@ -302,28 +307,28 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                    min=constants.VXLAN_VNI_MIN,
                                    max=constants.VXLAN_VNI_MAX))
                     sys.exit(1)
-                if (int(vlan_min) > int(vlan_max)):
+                if (int(vni_min) > int(vni_max)):
                     LOG.error(_("Invalid network VNI range: %s. Ending VNI "
                                 "should be greater or equal than starting "
                                 "one. Service terminated!"), entry)
                     sys.exit(1)
-                if check_overlapping_ranges(network_vni_ranges, int(vlan_min),
-                                            int(vlan_max)):
+                if check_overlapping_ranges(network_vni_ranges, int(vni_min),
+                                            int(vni_max)):
                     LOG.error(_("Invalid overlapping network VNI ranges: %s. "
                                 "Service terminated!"), entry)
                     sys.exit(1)
                 else:
-                    network_vni_ranges.append((int(vlan_min), int(vlan_max)))
-                self._add_network_vlan_range(physical_network,
-                                             int(vlan_min), int(vlan_max))
+                    network_vni_ranges.append((int(vni_min), int(vni_max)))
+                self._add_network_vni_range(physical_network,
+                                            int(vni_min), int(vni_max))
             except ValueError as ex:
                 LOG.error(_("Invalid network VNI entry: '%(entry)s' - %(ex)s. "
                             "Service terminated!"), dict(entry=entry, ex=ex))
                 sys.exit(1)
-        if not len(self.network_vlan_ranges):
+        if not len(self.network_vni_ranges):
             LOG.error(_("Empty VNI range for VXLAN. Service terminated!"))
             sys.exit(1)
-        LOG.debug(_("Network VNI ranges: %s"), self.network_vlan_ranges)
+        LOG.debug(_("Network VNI ranges: %s"), self.network_vni_ranges)
 
     def _check_view_auth(self, context, resource, action):
         return policy.check(context, action, resource)
@@ -338,6 +343,14 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     def _add_network(self, physical_network):
         if physical_network not in self.network_vlan_ranges:
             self.network_vlan_ranges[physical_network] = []
+
+    def _add_network_vni_range(self, physical_network, vni_min, vni_max):
+        self._add_vxlan_network(physical_network)
+        self.network_vni_ranges[physical_network].append((vni_min, vni_max))
+
+    def _add_vxlan_network(self, physical_network):
+        if physical_network not in self.network_vni_ranges:
+            self.network_vni_ranges[physical_network] = []
 
     # REVISIT(rkukura) Use core mechanism for attribute authorization
     # when available.
@@ -426,12 +439,16 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
 
         if network_type in [constants.TYPE_VLAN, constants.TYPE_VXLAN,
                             constants.TYPE_FLAT]:
+            if network_type == constants.TYPE_VXLAN:
+                network_ranges = self.network_vni_ranges
+            else:
+                network_ranges = self.network_vlan_ranges
             if physical_network_set:
-                if physical_network not in self.network_vlan_ranges:
+                if physical_network not in network_ranges:
                     msg = (_("Unknown provider:physical_network %s") %
                            physical_network)
                     raise q_exc.InvalidInput(error_message=msg)
-            elif 'default' in self.network_vlan_ranges:
+            elif 'default' in network_ranges:
                 physical_network = 'default'
             else:
                 msg = _("provider:physical_network required")

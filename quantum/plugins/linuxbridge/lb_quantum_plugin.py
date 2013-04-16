@@ -505,7 +505,7 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                     constants.TYPE_FLAT]:
                     db.reserve_specific_network(session, network_type,
                                                 physical_network,
-                                                network_type, vlan_id)
+                                                vlan_id)
                 # no reservation needed for TYPE_LOCAL
             net = super(LinuxBridgePluginV2, self).create_network(context,
                                                                   network)

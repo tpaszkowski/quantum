@@ -494,14 +494,16 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                     raise q_exc.TenantNetworksDisabled()
                 elif network_type in [constants.TYPE_VLAN,
                                       constants.TYPE_VXLAN]:
-                    physical_network, vlan_id = db.reserve_network(session)
+                    physical_network,
+                    vlan_id = db.reserve_network(session, network_type)
                 else:  # TYPE_LOCAL
                     vlan_id = constants.LOCAL_VLAN_ID
             else:
                 # provider network
                 if network_type in [constants.TYPE_VLAN, constants.TYPE_VXLAN,
                                     constants.TYPE_FLAT]:
-                    db.reserve_specific_network(session, physical_network,
+                    db.reserve_specific_network(session, network_type,
+                                                physical_network,
                                                 network_type, vlan_id)
                 # no reservation needed for TYPE_LOCAL
             net = super(LinuxBridgePluginV2, self).create_network(context,
@@ -531,9 +533,22 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         with session.begin(subtransactions=True):
             binding = db.get_network_binding(session, id)
             super(LinuxBridgePluginV2, self).delete_network(context, id)
-            if binding.network_type != constants.TYPE_LOCAL:
-                db.release_network(session, binding.physical_network,
-                                   binding.vlan_id, self.network_vlan_ranges)
+            if binding.network_type == constants.TYPE_LOCAL:
+                # do nothing
+                pass
+            elif binding.network_type != self.tenant_network_type:
+                # network state should be deleted as this is provider network
+                db.release_network(session, binding.network_type,
+                                   binding.physical_network, binding.vlan_id,
+                                   None)
+            elif binding.network_type == TYPE_VXLAN:
+                db.release_network(session, binding.network_type,
+                                   binding.physical_network, binding.vlan_id,
+                                   self.network_vni_ranges)
+            else:
+                db.release_network(session, binding.network_type,
+                                   binding.physical_network, binding.vlan_id,
+                                   self.network_vlan_ranges)
             # the network_binding record is deleted via cascade from
             # the network record, so explicit removal is not necessary
         self.notifier.network_delete(context, id)

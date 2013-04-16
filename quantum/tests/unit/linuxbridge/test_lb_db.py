@@ -31,157 +31,292 @@ VLAN_MAX = 19
 VLAN_RANGES = {PHYS_NET: [(VLAN_MIN, VLAN_MAX)]}
 UPDATED_VLAN_RANGES = {PHYS_NET: [(VLAN_MIN + 5, VLAN_MAX + 5)],
                        PHYS_NET_2: [(VLAN_MIN + 20, VLAN_MAX + 20)]}
+VXLAN_VLAN_RANGES = {PHYS_NET: [(VLAN_MIN + 5, VLAN_MAX + 5)],
+                     PHYS_NET_2: [(VLAN_MIN + 20, VLAN_MAX + 20)]}
 
 
 class NetworkStatesTest(base.BaseTestCase):
     def setUp(self):
         super(NetworkStatesTest, self).setUp()
         lb_db.initialize()
-        lb_db.sync_network_states(VLAN_RANGES)
+        lb_db.sync_network_states(VLAN_TYPE, VLAN_RANGES)
         self.session = db.get_session()
         self.addCleanup(db.clear_db)
 
     def test_sync_network_states(self):
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET,
+        network_type = VLAN_TYPE
+        network_type_vxlan = VXLAN_TYPE
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
                                                   VLAN_MIN - 1))
-        self.assertFalse(lb_db.get_network_state(PHYS_NET,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET,
                                                  VLAN_MIN).allocated)
-        self.assertFalse(lb_db.get_network_state(PHYS_NET,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET,
                                                  VLAN_MIN + 1).allocated)
-        self.assertFalse(lb_db.get_network_state(PHYS_NET,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET,
                                                  VLAN_MAX - 1).allocated)
-        self.assertFalse(lb_db.get_network_state(PHYS_NET,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET,
                                                  VLAN_MAX).allocated)
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET,
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
                                                   VLAN_MAX + 1))
 
-        lb_db.sync_network_states(UPDATED_VLAN_RANGES)
+        lb_db.sync_network_states(network_type, UPDATED_VLAN_RANGES)
 
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET,
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
                                                   VLAN_MIN + 5 - 1))
-        self.assertFalse(lb_db.get_network_state(PHYS_NET,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET,
                                                  VLAN_MIN + 5).allocated)
-        self.assertFalse(lb_db.get_network_state(PHYS_NET,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET,
                                                  VLAN_MIN + 5 + 1).allocated)
-        self.assertFalse(lb_db.get_network_state(PHYS_NET,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET,
                                                  VLAN_MAX + 5 - 1).allocated)
-        self.assertFalse(lb_db.get_network_state(PHYS_NET,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET,
                                                  VLAN_MAX + 5).allocated)
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET,
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
                                                   VLAN_MAX + 5 + 1))
 
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET_2,
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET_2,
                                                   VLAN_MIN + 20 - 1))
-        self.assertFalse(lb_db.get_network_state(PHYS_NET_2,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET_2,
                                                  VLAN_MIN + 20).allocated)
-        self.assertFalse(lb_db.get_network_state(PHYS_NET_2,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET_2,
                                                  VLAN_MIN + 20 + 1).allocated)
-        self.assertFalse(lb_db.get_network_state(PHYS_NET_2,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET_2,
                                                  VLAN_MAX + 20 - 1).allocated)
-        self.assertFalse(lb_db.get_network_state(PHYS_NET_2,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET_2,
                                                  VLAN_MAX + 20).allocated)
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET_2,
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET_2,
+                                                  VLAN_MAX + 20 + 1))
+       # reserve tenant network type vlan
+        physical_network, vlan_id = lb_db.reserve_network(self.session,
+                                                          network_type)
+        # switch tenant_network to VXLAN
+        lb_db.sync_network_states(network_type_vxlan, VXLAN_VLAN_RANGES)
+        # check if allocated network state was preserved
+        self.assertTrue(lb_db.get_network_state(network_type,
+                                                physical_network,
+                                                vlan_id).allocated)
+        lb_db.release_network(self.session, network_type, physical_network,
+                              vlan_id, None)
+        # check if network state was deleted
+        self.assertIsNone(lb_db.get_network_state(network_type,
+                                                  physical_network, vlan_id))
+        self.assertIsNone(lb_db.get_network_state(network_type_vxlan, PHYS_NET,
+                                                  VLAN_MIN + 5 - 1))
+        self.assertFalse(lb_db.get_network_state(network_type_vxlan, PHYS_NET,
+                                                 VLAN_MIN + 5).allocated)
+        self.assertFalse(lb_db.get_network_state(network_type_vxlan, PHYS_NET,
+                                                 VLAN_MIN + 5 + 1).allocated)
+        self.assertFalse(lb_db.get_network_state(network_type_vxlan, PHYS_NET,
+                                                 VLAN_MAX + 5 - 1).allocated)
+        self.assertFalse(lb_db.get_network_state(network_type_vxlan, PHYS_NET,
+                                                 VLAN_MAX + 5).allocated)
+        self.assertIsNone(lb_db.get_network_state(network_type_vxlan, PHYS_NET,
+                                                  VLAN_MAX + 5 + 1))
+
+        self.assertIsNone(lb_db.get_network_state(network_type_vxlan,
+                                                  PHYS_NET_2,
+                                                  VLAN_MIN + 20 - 1))
+        self.assertFalse(lb_db.get_network_state(network_type_vxlan,
+                                                 PHYS_NET_2,
+                                                 VLAN_MIN + 20).allocated)
+        self.assertFalse(lb_db.get_network_state(network_type_vxlan,
+                                                 PHYS_NET_2,
+                                                 VLAN_MIN + 20 + 1).allocated)
+        self.assertFalse(lb_db.get_network_state(network_type_vxlan,
+                                                 PHYS_NET_2,
+                                                 VLAN_MAX + 20 - 1).allocated)
+        self.assertFalse(lb_db.get_network_state(network_type_vxlan,
+                                                 PHYS_NET_2,
+                                                 VLAN_MAX + 20).allocated)
+        self.assertIsNone(lb_db.get_network_state(network_type_vxlan,
+                                                  PHYS_NET_2,
                                                   VLAN_MAX + 20 + 1))
 
-        lb_db.sync_network_states(VLAN_RANGES)
+        lb_db.sync_network_states(network_type, VLAN_RANGES)
 
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET,
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
                                                   VLAN_MIN - 1))
-        self.assertFalse(lb_db.get_network_state(PHYS_NET,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET,
                                                  VLAN_MIN).allocated)
-        self.assertFalse(lb_db.get_network_state(PHYS_NET,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET,
                                                  VLAN_MIN + 1).allocated)
-        self.assertFalse(lb_db.get_network_state(PHYS_NET,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET,
                                                  VLAN_MAX - 1).allocated)
-        self.assertFalse(lb_db.get_network_state(PHYS_NET,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET,
                                                  VLAN_MAX).allocated)
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET,
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
                                                   VLAN_MAX + 1))
 
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET_2,
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET_2,
                                                   VLAN_MIN + 20))
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET_2,
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET_2,
                                                   VLAN_MAX + 20))
 
     def test_network_pool(self):
+        network_type = VLAN_TYPE
         vlan_ids = set()
         for x in xrange(VLAN_MIN, VLAN_MAX + 1):
-            physical_network, vlan_id = lb_db.reserve_network(self.session)
+            physical_network, vlan_id = lb_db.reserve_network(self.session,
+                                                              network_type)
             self.assertEqual(physical_network, PHYS_NET)
             self.assertThat(vlan_id, matchers.GreaterThan(VLAN_MIN - 1))
             self.assertThat(vlan_id, matchers.LessThan(VLAN_MAX + 1))
             vlan_ids.add(vlan_id)
 
         with testtools.ExpectedException(q_exc.NoNetworkAvailable):
-            physical_network, vlan_id = lb_db.reserve_network(self.session)
+            physical_network, vlan_id = lb_db.reserve_network(self.session,
+                                                              network_type)
 
         for vlan_id in vlan_ids:
-            lb_db.release_network(self.session, PHYS_NET, vlan_id, VLAN_RANGES)
+            lb_db.release_network(self.session, network_type, PHYS_NET,
+                                  vlan_id, VLAN_RANGES)
 
     def test_specific_network_inside_pool(self):
+        network_type = VLAN_TYPE
         vlan_id = VLAN_MIN + 5
-        self.assertFalse(lb_db.get_network_state(PHYS_NET,
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET,
                                                  vlan_id).allocated)
-        lb_db.reserve_specific_network(self.session, PHYS_NET, VLAN_TYPE,
+        lb_db.reserve_specific_network(self.session, network_type, PHYS_NET,
                                        vlan_id)
-        self.assertTrue(lb_db.get_network_state(PHYS_NET,
+        self.assertTrue(lb_db.get_network_state(network_type, PHYS_NET,
                                                 vlan_id).allocated)
 
         with testtools.ExpectedException(q_exc.VlanIdInUse):
-            lb_db.reserve_specific_network(self.session, PHYS_NET, VLAN_TYPE,
-                                           vlan_id)
+            lb_db.reserve_specific_network(self.session, network_type,
+                                           PHYS_NET, vlan_id)
 
-        lb_db.release_network(self.session, PHYS_NET, vlan_id, VLAN_RANGES)
-        self.assertFalse(lb_db.get_network_state(PHYS_NET,
+        lb_db.release_network(self.session, network_type, PHYS_NET, vlan_id,
+                              VLAN_RANGES)
+        self.assertFalse(lb_db.get_network_state(network_type, PHYS_NET,
                                                  vlan_id).allocated)
 
     def test_specific_network_outside_pool(self):
+        network_type = VLAN_TYPE
         vlan_id = VLAN_MAX + 5
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET, vlan_id))
-        lb_db.reserve_specific_network(self.session, PHYS_NET, VLAN_TYPE,
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
+                                                  vlan_id))
+        lb_db.reserve_specific_network(self.session, network_type, PHYS_NET,
                                        vlan_id)
-        self.assertTrue(lb_db.get_network_state(PHYS_NET,
+        self.assertTrue(lb_db.get_network_state(network_type, PHYS_NET,
                                                 vlan_id).allocated)
 
         with testtools.ExpectedException(q_exc.VlanIdInUse):
-            lb_db.reserve_specific_network(self.session, PHYS_NET, VLAN_TYPE,
-                                           vlan_id)
+            lb_db.reserve_specific_network(self.session, network_type,
+                                           PHYS_NET, vlan_id)
 
-        lb_db.release_network(self.session, PHYS_NET, vlan_id, VLAN_RANGES)
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET, vlan_id))
+        lb_db.release_network(self.session, network_type, PHYS_NET, vlan_id,
+                              VLAN_RANGES)
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
+                                                  vlan_id))
 
     def test_specific_network_vxlan_pool(self):
+        network_type = VXLAN_TYPE
         vlan_id = VLAN_MAX + 5
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET, vlan_id))
-        lb_db.reserve_specific_network(self.session, PHYS_NET, VXLAN_TYPE,
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
+                                                  vlan_id))
+        lb_db.reserve_specific_network(self.session, network_type, PHYS_NET,
                                        vlan_id)
-        self.assertTrue(lb_db.get_network_state(PHYS_NET,
+        self.assertTrue(lb_db.get_network_state(network_type, PHYS_NET,
                                                 vlan_id).allocated)
 
         with testtools.ExpectedException(q_exc.VlanIdInUse):
-            lb_db.reserve_specific_network(self.session, PHYS_NET_2,
-                                           VXLAN_TYPE, vlan_id)
+            lb_db.reserve_specific_network(self.session, network_type,
+                                           PHYS_NET_2, vlan_id)
 
-        lb_db.release_network(self.session, PHYS_NET, vlan_id, VLAN_RANGES)
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET, vlan_id))
+        lb_db.release_network(self.session, network_type, PHYS_NET, vlan_id,
+                              VLAN_RANGES)
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
+                                                  vlan_id))
 
     def test_specific_network_vlan_pool(self):
+        network_type = VLAN_TYPE
         vlan_id = VLAN_MAX + 5
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET, vlan_id))
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET_2, vlan_id))
-        lb_db.reserve_specific_network(self.session, PHYS_NET, VLAN_TYPE,
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
+                                                  vlan_id))
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET_2,
+                                                  vlan_id))
+        lb_db.reserve_specific_network(self.session, network_type, PHYS_NET,
                                        vlan_id)
-        self.assertTrue(lb_db.get_network_state(PHYS_NET,
+        self.assertTrue(lb_db.get_network_state(network_type, PHYS_NET,
                                                 vlan_id).allocated)
-        lb_db.reserve_specific_network(self.session, PHYS_NET_2, VLAN_TYPE,
+        lb_db.reserve_specific_network(self.session, network_type, PHYS_NET_2,
                                        vlan_id)
-        self.assertTrue(lb_db.get_network_state(PHYS_NET_2,
+        self.assertTrue(lb_db.get_network_state(network_type, PHYS_NET_2,
                                                 vlan_id).allocated)
 
-        lb_db.release_network(self.session, PHYS_NET, vlan_id, VLAN_RANGES)
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET, vlan_id))
-        lb_db.release_network(self.session, PHYS_NET_2, vlan_id, VLAN_RANGES)
-        self.assertIsNone(lb_db.get_network_state(PHYS_NET_2, vlan_id))
+        lb_db.release_network(self.session, network_type, PHYS_NET, vlan_id,
+                              VLAN_RANGES)
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
+                                                  vlan_id))
+        lb_db.release_network(self.session, network_type, PHYS_NET_2, vlan_id,
+                              VLAN_RANGES)
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET_2,
+                                                  vlan_id))
+
+    def test_same_physical_network_vlan_vxlan(self):
+        network_type_vlan = VLAN_TYPE
+        network_type_vxlan = VXLAN_TYPE
+        vlan_id = VLAN_MAX + 5
+        self.assertIsNone(lb_db.get_network_state(network_type_vlan, PHYS_NET,
+                                                  vlan_id))
+        self.assertIsNone(lb_db.get_network_state(network_type_vxlan, PHYS_NET,
+                                                  vlan_id))
+        lb_db.reserve_specific_network(self.session, network_type_vlan,
+                                       PHYS_NET, vlan_id)
+        self.assertTrue(lb_db.get_network_state(network_type_vlan, PHYS_NET,
+                                                vlan_id).allocated)
+        lb_db.reserve_specific_network(self.session, network_type_vxlan,
+                                       PHYS_NET, vlan_id)
+        self.assertTrue(lb_db.get_network_state(network_type_vxlan, PHYS_NET,
+                                                vlan_id).allocated)
+
+        lb_db.release_network(self.session, network_type_vlan, PHYS_NET,
+                              vlan_id, VLAN_RANGES)
+        self.assertIsNone(lb_db.get_network_state(network_type_vlan, PHYS_NET,
+                                                  vlan_id))
+        lb_db.release_network(self.session, network_type_vxlan, PHYS_NET,
+                              vlan_id, VLAN_RANGES)
+        self.assertIsNone(lb_db.get_network_state(network_type_vxlan, PHYS_NET,
+                                                  vlan_id))
+
+    def test_release_network_notfound(self):
+        network_type = VLAN_TYPE
+        vlan_id = VLAN_MAX + 5
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
+                                                  vlan_id))
+        lb_db.reserve_specific_network(self.session, network_type, PHYS_NET,
+                                       vlan_id)
+        self.assertTrue(lb_db.get_network_state(network_type, PHYS_NET,
+                                                vlan_id).allocated)
+        lb_db.release_network(self.session, network_type, PHYS_NET, vlan_id,
+                              VLAN_RANGES)
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
+                                                  vlan_id))
+        lb_db.release_network(self.session, network_type, PHYS_NET, vlan_id,
+                              VLAN_RANGES)
+
+    def test_release_network_empty_vlan_ranges(self):
+        network_type = VLAN_TYPE
+        network_type_vxlan = VLAN_TYPE
+        vlan_id = VLAN_MAX + 5
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
+                                                  vlan_id))
+        lb_db.reserve_specific_network(self.session, network_type, PHYS_NET,
+                                       vlan_id)
+        self.assertTrue(lb_db.get_network_state(network_type, PHYS_NET,
+                                                vlan_id).allocated)
+        lb_db.release_network(self.session, network_type, PHYS_NET, vlan_id,
+                              VLAN_RANGES)
+        self.assertIsNone(lb_db.get_network_state(network_type, PHYS_NET,
+                                                  vlan_id))
+        lb_db.reserve_specific_network(self.session, network_type_vxlan,
+                                       PHYS_NET, vlan_id)
+        self.assertTrue(lb_db.get_network_state(network_type_vxlan, PHYS_NET,
+                                                vlan_id).allocated)
+        lb_db.release_network(self.session, network_type_vxlan, PHYS_NET,
+                              vlan_id, None)
+        self.assertIsNone(lb_db.get_network_state(network_type_vxlan, PHYS_NET,
+                                                  vlan_id))
 
 
 class NetworkBindingsTest(test_plugin.QuantumDbPluginV2TestCase):

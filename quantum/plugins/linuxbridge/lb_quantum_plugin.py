@@ -230,9 +230,11 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self._parse_network_vni_ranges()
         self._parse_network_vlan_ranges()
         if self.tenant_network_type == constants.TYPE_VXLAN:
-            db.sync_network_states(self.network_vni_ranges)
+            db.sync_network_states(self.tenant_network_type,
+                                   self.network_vni_ranges)
         else:
-            db.sync_network_states(self.network_vlan_ranges)
+            db.sync_network_states(self.tenant_network_type,
+                                   self.network_vlan_ranges)
         if self.tenant_network_type not in [constants.TYPE_LOCAL,
                                             constants.TYPE_VLAN,
                                             constants.TYPE_VXLAN,
@@ -494,8 +496,8 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                     raise q_exc.TenantNetworksDisabled()
                 elif network_type in [constants.TYPE_VLAN,
                                       constants.TYPE_VXLAN]:
-                    physical_network,
-                    vlan_id = db.reserve_network(session, network_type)
+                    (physical_network,
+                     vlan_id) = db.reserve_network(session, network_type)
                 else:  # TYPE_LOCAL
                     vlan_id = constants.LOCAL_VLAN_ID
             else:
@@ -541,7 +543,7 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 db.release_network(session, binding.network_type,
                                    binding.physical_network, binding.vlan_id,
                                    None)
-            elif binding.network_type == TYPE_VXLAN:
+            elif binding.network_type == constants.TYPE_VXLAN:
                 db.release_network(session, binding.network_type,
                                    binding.physical_network, binding.vlan_id,
                                    self.network_vni_ranges)

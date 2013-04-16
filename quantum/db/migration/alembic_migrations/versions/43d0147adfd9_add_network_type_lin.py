@@ -49,6 +49,21 @@ def upgrade(active_plugin=None, options=None):
 
     op.add_column('network_bindings',
                   sa.Column('network_type', sa.String(32), nullable=False))
+    op.add_column('network_states',
+                  sa.Column('network_type', sa.String(32), nullable=False,
+                            primary_key=True))
+    op.execute("UPDATE network_bindings SET network_type = 'local' WHERE "
+               "vlan_id = -2")
+    op.execute("UPDATE network_bindings SET network_type = 'flat' WHERE "
+               "vlan_id = -1")
+    op.execute("UPDATE network_bindings SET network_type = 'vlan' WHERE "
+               "vlan_id > 0")
+    op.execute("UPDATE network_states SET network_type = 'local' WHERE "
+               "vlan_id = -2")
+    op.execute("UPDATE network_states SET network_type = 'flat' WHERE "
+               "vlan_id = -1")
+    op.execute("UPDATE network_states SET network_type = 'vlan' WHERE "
+               "vlan_id > 0")
 
 
 def downgrade(active_plugin=None, options=None):
@@ -56,3 +71,4 @@ def downgrade(active_plugin=None, options=None):
         return
 
     op.drop_column('network_bindings', 'network_type')
+    op.drop_column('network_states', 'network_type')

@@ -38,20 +38,32 @@ migration_for_plugins = [
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import schema as sa_schema
+from sqlalchemy.types import NULLTYPE
 
 
 from quantum.db import migration
+
+
+# taken from alembic 0.5
+def _primary_key_constraint(name, table_name, cols, schema=None):
+    m = sa_schema.MetaData()
+    columns = [sa_schema.Column(n, NULLTYPE) for n in cols]
+    t1 = sa_schema.Table(table_name, m, *columns, schema=schema)
+    p = sa_schema.PrimaryKeyConstraint(*columns, name=name)
+    t1.append_constraint(p)
+    op.get_context().impl.add_constraint(p)
 
 
 def upgrade(active_plugin=None, options=None):
     if not migration.should_run(active_plugin, migration_for_plugins):
         return
 
+    op.drop_constraint('primary', 'network_states', type='primary')
     op.add_column('network_bindings',
                   sa.Column('network_type', sa.String(32), nullable=False))
     op.add_column('network_states',
-                  sa.Column('network_type', sa.String(32), nullable=False,
-                            primary_key=True))
+                  sa.Column('network_type', sa.String(32), nullable=False))
     op.execute("UPDATE network_bindings SET network_type = 'local' WHERE "
                "vlan_id = -2")
     op.execute("UPDATE network_bindings SET network_type = 'flat' WHERE "
@@ -64,6 +76,9 @@ def upgrade(active_plugin=None, options=None):
                "vlan_id = -1")
     op.execute("UPDATE network_states SET network_type = 'vlan' WHERE "
                "vlan_id > 0")
+    # dirty hack for older alembic versions (<0.5)
+    _primary_key_constraint('p_key', 'network_states',
+                            ['physical_network', 'vlan_id', 'network_type'])
 
 
 def downgrade(active_plugin=None, options=None):

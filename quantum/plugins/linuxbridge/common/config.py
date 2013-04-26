@@ -45,6 +45,9 @@ bridge_opts = [
     cfg.ListOpt('physical_interface_mappings',
                 default=DEFAULT_INTERFACE_MAPPINGS,
                 help=_("List of <physical_network>:<physical_interface>")),
+    cfg.StrOpt('tenant_network_type', default='local',
+               help=_("Network type for tenant networks "
+                      "(local, vlan, vxlan or none)")),
 ]
 
 agent_opts = [

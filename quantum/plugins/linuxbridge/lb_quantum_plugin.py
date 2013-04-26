@@ -225,8 +225,19 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     binding_set = "extension:port_binding:set"
 
     def __init__(self):
+        def get_tenant_network_type(conf):
+            if (conf.LINUX_BRIDGE.tenant_network_type is not
+                constants.TYPE_LOCAL):
+                return conf.VLANS.tenant_network_type
+            if conf.VLANS.tenant_network_type is not constants.TYPE_LOCAL:
+                LOG.deprecated(_('VLANS.tenant_network_type is deprecated! '
+                                 'Please move tenant_network_type '
+                                 'configuration to [LINUX_BRIDGE] section.'))
+                return conf.VLANS.tenant_network_type
+            return constants.TYPE_LOCAL
+
         db.initialize()
-        self.tenant_network_type = cfg.CONF.VLANS.tenant_network_type
+        self.tenant_network_type = get_tenant_network_type(cfg.CONF)
         self._parse_network_vni_ranges()
         self._parse_network_vlan_ranges()
         if self.tenant_network_type == constants.TYPE_VXLAN:

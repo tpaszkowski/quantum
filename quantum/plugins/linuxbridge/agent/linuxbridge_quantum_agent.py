@@ -221,10 +221,6 @@ class LinuxBridgeManager:
             # vxlan_port is a tuple min,max port value
             if len(cfg.CONF.VXLAN.vxlan_port) == 2:
                 args['port'] = cfg.CONF.VXLAN.vxlan_port
-            elif len(cfg.CONF.VXLAN.vxlan_port) != 0:
-                LOG.error(_("Wrong vxlan_port value: %s !"),
-                          ",".join(cfg.CONF.VXLAN.vxlan_port))
-                return
             if (cfg.CONF.VXLAN.vxlan_local_ip and
                     len(cfg.CONF.VXLAN.vxlan_local_ip)):
                 args['local'] = cfg.CONF.VXLAN.vxlan_local_ip
@@ -323,7 +319,9 @@ class LinuxBridgeManager:
                                                  physical_interface,
                                                  vlan_id)
         else:
-            LOG.error(_("Unknown network type %s."), network_type)
+            LOG.error(_("Unknown network type %(network_type)s for network "
+                        "%(network_id)s."), {network_type=network_type,
+                                             network_id=network_id})
             return
         return interface is not None
 
@@ -721,6 +719,12 @@ def main():
                     " Agent terminated!"), e)
         sys.exit(1)
     LOG.info(_("Interface mappings: %s"), interface_mappings)
+    # vxlan_port is a tuple min,max port value
+    if (len(cfg.CONF.VXLAN.vxlan_port) != 2 and
+            len(cfg.CONF.VXLAN.vxlan_port) != 0):
+        LOG.error(_("Wrong vxlan_port value: %s. Agent terminated!"),
+                  ",".join(cfg.CONF.VXLAN.vxlan_port))
+        sys.exit(1)
 
     polling_interval = cfg.CONF.AGENT.polling_interval
     root_helper = cfg.CONF.AGENT.root_helper

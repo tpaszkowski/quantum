@@ -25,11 +25,11 @@ from quantum import scheduler
 DEFAULT_VLAN_RANGES = []
 DEFAULT_VNI_RANGES = []
 DEFAULT_INTERFACE_MAPPINGS = []
-DEFAULT_VXLAN_TTL = None
+DEFAULT_VXLAN_TTL = 0
 DEFAULT_VXLAN_GROUP = '239.1.1.1'
-DEFAULT_VXLAN_TOS = None
+DEFAULT_VXLAN_TOS = 0
 DEFAULT_VXLAN_PORT = []
-DEFAULT_VXLAN_LOCAL_IP = None
+DEFAULT_VXLAN_LOCAL_IP = ''
 
 vlan_opts = [
     cfg.StrOpt('tenant_network_type', default='local',

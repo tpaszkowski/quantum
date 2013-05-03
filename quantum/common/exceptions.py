@@ -258,3 +258,7 @@ class InvalidConfigurationOption(QuantumException):
 class GatewayConflictWithAllocationPools(InUse):
     message = _("Gateway ip %(ip_address)s conflicts with "
                 "allocation pool %(pool)s")
+
+
+class InvalidVxlanPortRange(QuantumException):
+    message = _("An invalid VXLAN port range was provided")

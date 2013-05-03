@@ -113,6 +113,8 @@ class IPWrapper(SubProcessBase):
         # tuple: min,max
         if port and len(port) == 2:
                 cmd.extend(['port', port[0], port[1]])
+        elif port:
+            raise exceptions.InvalidVxlanPortRange()
         self._as_root('', 'link', cmd)
         return (IPDevice(name, self.root_helper, self.namespace))
 

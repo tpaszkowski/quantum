@@ -154,7 +154,10 @@ class LinuxBridgeManager:
         """Create a vxlan and bridge unless they already exist."""
         interface = self.ensure_vxlan(network_id, physical_interface, vlan_id)
         if not interface:
-            LOG.error(_("Failed creating vxlan interface for %s !"), vlan_id)
+            LOG.error(_("Failed creating vxlan interface for %(vlan_id)s on "
+                        "interface %(physical_interface)s !"),
+                      {vlan_id=vlan_id,
+                       physical_interface=physical_interface})
             return
         bridge_name = self.get_bridge_name(network_id)
         self.ensure_bridge(bridge_name, interface)
@@ -206,8 +209,9 @@ class LinuxBridgeManager:
             LOG.debug(_("Creating vxlan interface %(interface)s for "
                         "VLAN %(vlan_id)s on interface "
                         "%(physical_interface)s"),
-                      dict(interface=interface, vlan_id=vlan_id,
-                           physical_interface=physical_interface))
+                      {interface=interface,
+                       vlan_id=vlan_id,
+                       physical_interface=physical_interface})
             args = {'dev': physical_interface,
                     'group': cfg.CONF.VXLAN.vxlan_group}
             if cfg.CONF.VXLAN.vxlan_ttl:

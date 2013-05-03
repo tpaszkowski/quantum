@@ -33,8 +33,8 @@ class ConfigurationTest(base.BaseTestCase):
         self.assertEqual(0,
                          len(cfg.CONF.LINUX_BRIDGE.
                              physical_interface_mappings))
-        self.assertIsNone(cfg.CONF.VXLAN.vxlan_ttl)
+        self.assertEqual(0, cfg.CONF.VXLAN.vxlan_ttl)
         self.assertEqual('239.1.1.1', cfg.CONF.VXLAN.vxlan_group)
-        self.assertIsNone(cfg.CONF.VXLAN.vxlan_tos)
+        self.assertEqual(0, cfg.CONF.VXLAN.vxlan_tos)
         self.assertFalse(len(cfg.CONF.VXLAN.vxlan_port))
-        self.assertIsNone(cfg.CONF.VXLAN.vxlan_local_ip)
+        self.assertEqual('', cfg.CONF.VXLAN.vxlan_local_ip)

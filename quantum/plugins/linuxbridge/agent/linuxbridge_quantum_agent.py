@@ -156,8 +156,8 @@ class LinuxBridgeManager:
         if not interface:
             LOG.error(_("Failed creating vxlan interface for %(vlan_id)s on "
                         "interface %(physical_interface)s !"),
-                      {vlan_id=vlan_id,
-                       physical_interface=physical_interface})
+                      {vlan_id: vlan_id,
+                       physical_interface: physical_interface})
             return
         bridge_name = self.get_bridge_name(network_id)
         self.ensure_bridge(bridge_name, interface)
@@ -209,9 +209,9 @@ class LinuxBridgeManager:
             LOG.debug(_("Creating vxlan interface %(interface)s for "
                         "VLAN %(vlan_id)s on interface "
                         "%(physical_interface)s"),
-                      {interface=interface,
-                       vlan_id=vlan_id,
-                       physical_interface=physical_interface})
+                      {interface: interface,
+                       vlan_id: vlan_id,
+                       physical_interface: physical_interface})
             args = {'dev': physical_interface,
                     'group': cfg.CONF.VXLAN.vxlan_group}
             if cfg.CONF.VXLAN.vxlan_ttl:
@@ -320,8 +320,8 @@ class LinuxBridgeManager:
                                                  vlan_id)
         else:
             LOG.error(_("Unknown network type %(network_type)s for network "
-                        "%(network_id)s."), {network_type=network_type,
-                                             network_id=network_id})
+                        "%(network_id)s."), {network_type: network_type,
+                                             network_id: network_id})
             return
         return interface is not None
 
@@ -706,6 +706,21 @@ class LinuxBridgeQuantumAgentRPC(sg_rpc.SecurityGroupAgentRpcMixin):
                            'elapsed': elapsed})
 
 
+def check_vxlan_port_value(vxlan_port):
+    # vxlan_port is a tuple min,max port value
+    if len(vxlan_port) == 2:
+        try:
+            int(vxlan_port[0])
+            int(vxlan_port[1])
+        except ValueError:
+            return False
+        return True
+    elif not len(vxlan_port):
+        return True
+    else:
+        return False
+
+
 def main():
     eventlet.monkey_patch()
     cfg.CONF(project='quantum')
@@ -720,8 +735,7 @@ def main():
         sys.exit(1)
     LOG.info(_("Interface mappings: %s"), interface_mappings)
     # vxlan_port is a tuple min,max port value
-    if (len(cfg.CONF.VXLAN.vxlan_port) != 2 and
-            len(cfg.CONF.VXLAN.vxlan_port) != 0):
+    if not check_vxlan_port_value(cfg.CONF.VXLAN.vxlan_port):
         LOG.error(_("Wrong vxlan_port value: %s. Agent terminated!"),
                   ",".join(cfg.CONF.VXLAN.vxlan_port))
         sys.exit(1)

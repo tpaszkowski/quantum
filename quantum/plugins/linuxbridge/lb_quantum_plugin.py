@@ -288,8 +288,8 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                     LOG.error(_("Invalid network VLAN range: "
                                 "'%(entry)s' - %(ex)s. "
                                 "Service terminated!"),
-                              {entry=entry,
-                               ex=ex})
+                              {entry: entry,
+                               ex: ex})
                     sys.exit(1)
             else:
                 self._add_network(entry)
@@ -317,9 +317,9 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                 "Starting or ending VNI is out of allowed "
                                 "range (%(min)s through %(max)s). "
                                 "Service terminated!"),
-                              {entry=entry,
-                               min=constants.VXLAN_VNI_MIN,
-                               max=constants.VXLAN_VNI_MAX})
+                              {entry: entry,
+                               min: constants.VXLAN_VNI_MIN,
+                               max: constants.VXLAN_VNI_MAX})
                     sys.exit(1)
                 if (int(vni_min) > int(vni_max)):
                     LOG.error(_("Invalid network VNI range: %s. Ending VNI "
@@ -337,8 +337,8 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                             int(vni_min), int(vni_max))
             except ValueError as ex:
                 LOG.error(_("Invalid network VNI entry: '%(entry)s' - %(ex)s. "
-                            "Service terminated!"), {entry=entry,
-                                                     ex=ex})
+                            "Service terminated!"), {entry: entry,
+                                                     ex: ex})
                 sys.exit(1)
         if not len(self.network_vni_ranges):
             LOG.debug(_("Empty VNI range for VXLAN. Service terminated!"))
@@ -418,9 +418,9 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                     constants.VLAN_ID_MAX):
                 msg = (_("provider:segmentation_id %(segmentation_id)s out of "
                          "range " "(%(min)s through %(max)s)") %
-                       {segmentation_id=segmentation_id,
-                        min=constants.VLAN_ID_MIN,
-                        max=constants.VLAN_ID_MAX})
+                       {segmentation_id: segmentation_id,
+                        min: constants.VLAN_ID_MIN,
+                        max: constants.VLAN_ID_MAX})
                 raise q_exc.InvalidInput(error_message=msg)
         elif network_type == constants.TYPE_VXLAN:
             if not segmentation_id_set:
@@ -430,9 +430,9 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                     constants.VXLAN_VNI_MAX):
                 msg = (_("provider:segmentation_id %(segmentation_id)s out of "
                          "range (%(min)s through %(max)s)") %
-                       {segmentation_id=segmentation_id,
-                        min=constants.VXLAN_VNI_MIN,
-                        max=constants.VXLAN_VNI_MAX})
+                       {segmentation_id: segmentation_id,
+                        min: constants.VXLAN_VNI_MIN,
+                        max: constants.VXLAN_VNI_MAX})
                 raise q_exc.InvalidInput(error_message=msg)
         elif network_type == constants.TYPE_LOCAL:
             if physical_network_set:
@@ -552,7 +552,8 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 pass
             else:
                 if binding.network_type != self.tenant_network_type:
-                    # network state should be deleted as this is provider network
+                    # network state should be deleted as this is provider
+                    # network
                     network_vlan_ranges = None
                 elif binding.network_type == constants.TYPE_VXLAN:
                     network_vlan_ranges = self.network_vni_ranges

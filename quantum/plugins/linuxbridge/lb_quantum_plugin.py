@@ -550,19 +550,18 @@ class LinuxBridgePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
             if binding.network_type == constants.TYPE_LOCAL:
                 # do nothing
                 pass
-            elif binding.network_type != self.tenant_network_type:
-                # network state should be deleted as this is provider network
-                db.release_network(session, binding.network_type,
-                                   binding.physical_network, binding.vlan_id,
-                                   None)
-            elif binding.network_type == constants.TYPE_VXLAN:
-                db.release_network(session, binding.network_type,
-                                   binding.physical_network, binding.vlan_id,
-                                   self.network_vni_ranges)
             else:
+                if binding.network_type != self.tenant_network_type:
+                    # network state should be deleted as this is provider network
+                    network_vlan_ranges = None
+                elif binding.network_type == constants.TYPE_VXLAN:
+                    network_vlan_ranges = self.network_vni_ranges
+                else:
+                    # vlan or flat network type
+                    network_vlan_ranges = self.network_vlan_ranges
                 db.release_network(session, binding.network_type,
                                    binding.physical_network, binding.vlan_id,
-                                   self.network_vlan_ranges)
+                                   network_vlan_ranges)
             # the network_binding record is deleted via cascade from
             # the network record, so explicit removal is not necessary
         self.notifier.network_delete(context, id)

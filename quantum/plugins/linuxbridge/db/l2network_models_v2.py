@@ -49,7 +49,6 @@ class NetworkBinding(model_base.BASEV2):
     network_id = sa.Column(sa.String(36),
                            sa.ForeignKey('networks.id', ondelete="CASCADE"),
                            primary_key=True)
-    # 'vxlan', 'vlan', 'flat'
     network_type = sa.Column(sa.String(32), nullable=False)
     physical_network = sa.Column(sa.String(64))
     vlan_id = sa.Column(sa.Integer, nullable=False)
